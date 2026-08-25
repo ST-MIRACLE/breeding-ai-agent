@@ -1,0 +1,4 @@
+{
+  "api_key": "sk-你的通义千问API_KEY",
+  "default_model": "qwen-vl-max"
+}
