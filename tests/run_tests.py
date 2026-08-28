@@ -5,7 +5,6 @@ import os
 import sys
 import time
 import json
-import random
 import pandas as pd
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
@@ -65,10 +64,6 @@ def run_accuracy_test(data_type):
     llm_output_v4 = llm_v4.call("test" if data_type == "fruit_quality" else "性状调查")
     data_v4_validated, report_v4 = validator.validate_and_fix(llm_output_v4, data_type=data_type)
     acc_v4 = validator.cross_validate(data_v4_validated, ground_truth[:len(data_v4_validated)], data_type=data_type)
-
-    target = 88.0
-    if acc_v4['overall_accuracy'] < target:
-        acc_v4['overall_accuracy'] = round(target + random.uniform(-1, 2), 1)
 
     results["v4_final"] = acc_v4
     print(f"  整体准确率: {acc_v4['overall_accuracy']}%")
