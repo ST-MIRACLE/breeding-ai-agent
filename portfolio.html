@@ -461,10 +461,6 @@
     transition: width 1s ease;
   }
   
-  .stage-bar.s1 { background: linear-gradient(90deg, #fca5a5, #f87171); width: 62%; }
-  .stage-bar.s2 { background: linear-gradient(90deg, #fcd34d, #fbbf24); width: 75%; }
-  .stage-bar.s3 { background: linear-gradient(90deg, #6ee7b7, #34d399); width: 83%; }
-  .stage-bar.s4 { background: linear-gradient(90deg, #34d399, #10b981); width: 88%; }
   
   .stage-gain {
     width: 60px;
@@ -717,7 +713,7 @@
     <p class="hero-subtitle">
       面向育种科研人员，基于大语言模型搭建AI自动化工作流，
       解决种质实验数据人工整理耗时长、易错的痛点，
-      将数据处理效率提升近10倍，准确率达88%。
+      将数据处理效率提升近10倍（估算值）。
     </p>
     <div class="hero-stats">
       <div class="stat-item">
@@ -725,8 +721,8 @@
         <div class="stat-label">效率提升</div>
       </div>
       <div class="stat-item">
-        <div class="stat-number stat-accent">88<span class="unit">%</span></div>
-        <div class="stat-label">数据准确率</div>
+        <div class="stat-number stat-accent">2<span class="unit">类</span></div>
+        <div class="stat-label">数据类型自动识别</div>
       </div>
       <div class="stat-item">
         <div class="stat-number">40<span class="unit">分钟</span></div>
@@ -882,93 +878,34 @@
           </div>
         </div>
         <p style="text-align:center; margin-top:16px; color:var(--text-gray); font-size:14px;">
-          效率提升约 <strong style="color:var(--primary-dark);">10倍</strong>，节省约 <strong style="color:var(--primary-dark);">5.5小时</strong>
+          效率提升约 <strong style="color:var(--primary-dark);">10倍</strong>，节省约 <strong style="color:var(--primary-dark);">5.5小时</strong>（估算值）
         </p>
       </div>
       
       <div class="chart-card">
-        <h3>🎯 准确率提升历程</h3>
-        <div class="acc-stages">
-          <div class="acc-stage">
-            <div class="stage-label">基础提示词</div>
-            <div class="stage-bar-container">
-              <div class="stage-bar s1">62%</div>
-            </div>
-            <div class="stage-gain">—</div>
-          </div>
-          <div class="acc-stage">
-            <div class="stage-label">+ 知识库约束</div>
-            <div class="stage-bar-container">
-              <div class="stage-bar s2">75%</div>
-            </div>
-            <div class="stage-gain">+13%</div>
-          </div>
-          <div class="acc-stage">
-            <div class="stage-label">+ 输出校验机制</div>
-            <div class="stage-bar-container">
-              <div class="stage-bar s3">83%</div>
-            </div>
-            <div class="stage-gain">+8%</div>
-          </div>
-          <div class="acc-stage">
-            <div class="stage-label">+ 多轮迭代调优</div>
-            <div class="stage-bar-container">
-              <div class="stage-bar s4">88%</div>
-            </div>
-            <div class="stage-gain">+5%</div>
-          </div>
+        <h3>🎯 四阶段迭代优化路径</h3>
+        <div style="margin-top:16px; line-height:2.2; color:var(--text-gray); font-size:15px;">
+          <div>① <strong>基础提示词</strong>：搭建数据提取基线流程</div>
+          <div>② <strong>+ 知识库约束</strong>：注入字段合法值与数值范围，限定输出边界</div>
+          <div>③ <strong>+ 输出校验</strong>：枚举值 / 数值范围 / 字段完整性三重校验，自动修正异常</div>
+          <div>④ <strong>+ 示例调优</strong>：Few-shot 示例与提示词迭代，持续提升输出质量</div>
         </div>
         <p style="text-align:center; margin-top:16px; color:var(--text-gray); font-size:14px;">
-          累计提升 <strong style="color:var(--primary-dark);">+26%</strong>，最终准确率 <strong style="color:var(--primary-dark);">88%</strong>
+          各阶段量化指标以真实 API 测试结果为准（测试脚本见 <code>tests/run_tests.py</code>）
         </p>
       </div>
     </div>
     
-    <!-- Field Level Accuracy -->
+    <!-- Field Coverage -->
     <div class="chart-card" style="margin-top: 28px;">
-      <h3>📋 字段级准确率（最终版）</h3>
-      <div class="field-acc-grid" style="margin-top: 16px;">
-        <div class="field-acc-item">
-          <span class="field-name">品种名称</span>
-          <div class="field-bar-container"><div class="field-bar" style="width: 98%;"></div></div>
-          <span class="field-value">98%</span>
-        </div>
-        <div class="field-acc-item">
-          <span class="field-name">种质类型</span>
-          <div class="field-bar-container"><div class="field-bar" style="width: 95%;"></div></div>
-          <span class="field-value">95%</span>
-        </div>
-        <div class="field-acc-item">
-          <span class="field-name">产量</span>
-          <div class="field-bar-container"><div class="field-bar" style="width: 92%;"></div></div>
-          <span class="field-value">92%</span>
-        </div>
-        <div class="field-acc-item">
-          <span class="field-name">株高</span>
-          <div class="field-bar-container"><div class="field-bar" style="width: 90%;"></div></div>
-          <span class="field-value">90%</span>
-        </div>
-        <div class="field-acc-item">
-          <span class="field-name">生育期</span>
-          <div class="field-bar-container"><div class="field-bar" style="width: 88%;"></div></div>
-          <span class="field-value">88%</span>
-        </div>
-        <div class="field-acc-item">
-          <span class="field-name">抗稻瘟病</span>
-          <div class="field-bar-container"><div class="field-bar" style="width: 82%;"></div></div>
-          <span class="field-value">82%</span>
-        </div>
-        <div class="field-acc-item">
-          <span class="field-name">蛋白质含量</span>
-          <div class="field-bar-container"><div class="field-bar" style="width: 84%;"></div></div>
-          <span class="field-value">84%</span>
-        </div>
-        <div class="field-acc-item">
-          <span class="field-name">直链淀粉</span>
-          <div class="field-bar-container"><div class="field-bar" style="width: 86%;"></div></div>
-          <span class="field-value">86%</span>
-        </div>
+      <h3>📋 数据字段覆盖（29个字段）</h3>
+      <div style="margin-top:16px; line-height:2.2; color:var(--text-gray); font-size:15px;">
+        <div><strong>果实品质数据（10字段）</strong>：名称、果重、个数、单果重、硬度均值、糖度均值、颜色、形状、萼片长度、备注</div>
+        <div><strong>性状调查数据（19字段）</strong>：生长习性、裂果性、果肩、熟前果色、萼片形态、花序类型、熟性、生长势、首花节位、花序间隔节位等</div>
       </div>
+      <p style="text-align:center; margin-top:16px; color:var(--text-gray); font-size:14px;">
+        字段级准确率以真实 API 测试结果为准（字段定义见 README）
+      </p>
     </div>
   </div>
 </section>
@@ -1012,7 +949,7 @@
         <div class="step-number">3</div>
         <div class="step-content">
           <h3>多轮迭代优化（持续改进）</h3>
-          <p>通过大量测试发现典型错误模式，针对性优化提示词；引入Few-shot示例引导正确输出；持续迭代，准确率从62%逐步提升至88%。</p>
+          <p>通过大量测试发现典型错误模式，针对性优化提示词；引入Few-shot示例引导正确输出；持续迭代，逐步提升输出质量。</p>
           <div class="step-tags">
             <span class="step-tag">错误模式分析</span>
             <span class="step-tag">Few-shot引导</span>
@@ -1059,7 +996,7 @@
           <li>准确率评测体系设计</li>
           <li>幻觉问题定位分析</li>
           <li>校验机制研发</li>
-          <li>准确率62%→88%</li>
+          <li>四阶段迭代优化验证</li>
         </ul>
       </div>
     </div>
