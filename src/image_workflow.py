@@ -147,9 +147,12 @@ def process_image(image_path, api_key=None, output_file=None, model=None, data_t
     raw_output = client.extract_table_from_image(image_path, prompt)
     print("  - 图片识别完成")
 
-    print(f"\n[3/4] 解析结构化数据 + 知识库校验")
+    print(f"\n[3/4] 解析结构化数据 + 均值计算 + 知识库校验")
     data = client.parse_json_output(raw_output)
     print(f"  - 识别到 {len(data)} 份材料")
+
+    # 计算单果重（果重/个数），如模型输出原始读数则计算均值
+    data = compute_means_from_raw(data)
 
     validator = DataValidator()
     validated, report = validator.validate_and_fix(
