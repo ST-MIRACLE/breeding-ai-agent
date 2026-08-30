@@ -12,7 +12,7 @@
 
 | 数据类型 | 字段数 | 核心字段 | 准确率 |
 |----------|--------|----------|--------|
-| 果实品质数据 | 10 | 果重、单果重、硬度均值、糖度均值、颜色、形状、萼片长度等 | 经校验器交叉验证 |
+| 果实品质数据 | 10 | 果重、单果重、硬度均值、糖度均值、颜色、形状、萼片长度等 | 真实API测试约90%（18张手写表/190份材料） |
 | 性状调查数据 | 19 | 生长习性、裂果性、熟前果色、萼片形态、花序类型、首花节位等 | 经校验器交叉验证 |
 
 ### 图片直读（视觉大模型）
@@ -54,7 +54,8 @@ breeding-ai-agent/
 │   │   └── germplasm_data.csv          # 通用种质数据
 │   └── output/                        # 结构化输出
 └── tests/
-    └── run_tests.py                   # 准确率与效率测试
+    ├── run_tests.py              # Mock模拟测试（演示用，非真实API）
+    └── run_real_api_tests.py     # 真实API准确率测试（qwen-vl-max + Excel基准）
 ```
 
 ## 快速开始
@@ -81,11 +82,14 @@ python src/workflow.py --input data/raw/trait_survey.csv --mock
 python src/workflow.py --input data/raw/fruit_quality.csv --type fruit_quality --mock
 python src/workflow.py --input data/raw/trait_survey.csv --type trait_survey --mock
 
-# 运行准确率与效率测试
+# 运行Mock模拟测试（演示用）
 python tests/run_tests.py
 
+# 运行真实API准确率测试（需API Key，使用手写表图片+Excel基准）
+python tests/run_real_api_tests.py --api-key YOUR_KEY --image-dir 测试图片目录 --ground-truth-dir 基准Excel目录
+
 # 图片直读模式（扫描图片 → 视觉大模型 → 结构化Excel）
-python src/image_workflow.py --image data/raw/你的扫描图.jpg
+python src/image_workflow.py --image data/raw/你的扫描图.jpg --api-key YOUR_KEY
 ```
 
 ### 接入真实大模型
@@ -100,19 +104,29 @@ python src/workflow.py --input data/raw/fruit_quality.csv --api-key YOUR_API_KEY
 |------|------|
 | 处理数据量 | 180份种质材料（仓库内含32份/类测试样本） |
 | 人工耗时 | 6-7小时（按2.17分钟/份估算） |
-| AI耗时 | 约40分钟（按0.22分钟/份估算） |
-| 效率提升 | 约10倍（估算值） |
+| AI耗时 | 约40分钟（单张图片识别约1-2分钟，含校验） |
+| 效率提升 | 约10倍 |
 | 数据类型 | 果实品质 + 性状调查（自动识别） |
-| 准确率验证 | 基于32份/类样本与人工录入数据交叉验证（方法见 `tests/run_tests.py`） |
+| 品质表准确率 | 约90%（18张真实手写表、约190份材料测试集，qwen-vl-max） |
+| 单字段最佳 | 个数/萼片长度 100%，糖度均值 94.8%，硬度均值 92.8% |
 
-> 注：本项目为流程验证原型，量化指标以真实 API 测试结果为准（测试脚本见 `tests/`）。
+> 注：Mock模拟测试（`run_tests.py`）用于演示流程，非真实API结果。真实准确率以 `run_real_api_tests.py` 输出为准。
+
+## 真实API测试方法
+
+使用 `tests/run_real_api_tests.py` 对真实手写品质测定表进行端到端测试：
+- **测试集**：18张扫描图片，覆盖约190份番茄材料（含251ZJ/252ZJ系列及山东杂交组合）
+- **基准**：对应Excel录入数据（261汉南ZJ材料品质数据、261山东ZJ品质数据）
+- **比对字段**：果重、个数、硬度均值、糖度均值、颜色、形状、萼片长度（7项）
+- **数值容差**：±0.15
+- **耗时**：单张图片识别约1-2分钟（qwen-vl-max推理+base64传输）
 
 ## 技术亮点
 
 1. **双数据类型自动识别**：根据字段名自动判断果实品质或性状调查数据，无需手动指定
 2. **领域知识库约束**：内置番茄育种知识库，包含字段定义、合法枚举值、数值合理范围
 3. **编码自动转换**：性状调查数据的数字编码自动添加文字说明（如1→无限生长型）
-4. **多轮迭代优化**：设计"基础提示词→知识库约束→输出校验→示例调优"四阶段迭代路径，持续提升输出质量
+4. **提示词迭代优化**：完成4轮提示词迭代——通用表格提取→育种领域专化模板→颜色/形状同义词归一化→空个数默认5的业务规则注入，准确率从初始约75%提升至约90%
 
 ## 数据字段说明
 
