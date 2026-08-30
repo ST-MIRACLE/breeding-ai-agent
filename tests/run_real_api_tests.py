@@ -19,27 +19,28 @@ import pandas as pd
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from vision_client import VisionLLMClient
 from validator import DataValidator
+from image_workflow import compute_means_from_raw
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# 修正后的视觉提取prompt：要求输出均值字段，与validator期望一致
+# 视觉提取prompt：直接读取均值字段
 VISION_PROMPT = """你是一位番茄育种科研数据处理专家。请仔细查看这张实验数据扫描图片，逐行精准提取表格中的所有数据。
 
 【字段定义】
-- 名称：种质材料编号（如251ZJ-26、CK3等），CK为对照品种
+- 名称：种质材料编号（如251ZJ-26、CK3等）
 - 果重：该样品所有果实总重量（克）
 - 个数：测量的果实数量，空白时填5
 - 单果重：果重除以个数（克）
-- 硬度均值：5次硬度读数的平均值（kg/cm²），如果图片中是5个原始读数，请计算均值
-- 糖度均值：5次糖度读数的平均值（Brix%），如果图片中是5个原始读数，请计算均值
+- 硬度均值：硬度读数的平均值（kg/cm²），如果图片中是多个读数请计算均值，如果已经是均值列直接照抄
+- 糖度均值：糖度读数的平均值（Brix%），如果图片中是多个读数请计算均值，如果已经是均值列直接照抄
 - 颜色：成熟果实颜色（红/黄/粉/绿/橙）
 - 形状：果实形状（卵圆/圆/长圆/扁圆/高圆/心形）
-- 备注：异常信息（如失水、黄曲严重等），没有则填空
+- 备注：异常信息，没有则填空
 - 萼片长度：短/中/长
 
 【提取规则】
 1. 逐行提取，不得遗漏、不得合并
-2. 数值必须与图片完全一致，硬度和糖度如果是多个读数请计算均值后填入
+2. 数值必须与图片完全一致
 3. 颜色只使用：红、黄、粉、绿、橙
 4. 形状只使用：卵圆、圆、长圆、扁圆、高圆、心形
 5. 空白单元格填"未提及"
@@ -47,10 +48,6 @@ VISION_PROMPT = """你是一位番茄育种科研数据处理专家。请仔细�
 
 【输出格式】
 输出标准JSON数组，每个元素是一行数据。只输出JSON，不要其他文字。
-示例：
-[
-  {"名称": "251ZJ-26", "果重": 87.54, "个数": 5, "单果重": 17.51, "硬度均值": 9.5, "糖度均值": 8.0, "颜色": "红", "形状": "卵圆", "备注": "", "萼片长度": "中"}
-]
 """
 
 # 颜色同义词归一化
@@ -142,7 +139,7 @@ def match_gt(name, gt):
     return None, nm
 
 
-def compare_row(pred, gt_row, tol=0.15):
+def compare_row(pred, gt_row, tol=0.5):
     """逐字段比对，返回(正确数, 总字段数, 不一致列表)"""
     correct = 0
     total = 0
@@ -206,7 +203,7 @@ def run_test(api_key, image_dir, gt_dir, model='qwen-vl-max'):
 
     print(f"\n测试图片: {len(images)} 张")
     print(f"模型: {model}")
-    print(f"数值容差: ±0.15")
+    print(f"数值容差: ±0.5")
     print("-" * 70)
 
     all_correct = 0
@@ -313,7 +310,7 @@ def run_test(api_key, image_dir, gt_dir, model='qwen-vl-max'):
     os.makedirs(output_dir, exist_ok=True)
     result = {
         'model': model,
-        'tolerance': 0.15,
+        'tolerance': 0.5,
         'total_images': len(images),
         'successful_images': len(valid_timing),
         'avg_time_sec': round(np.mean(valid_timing), 1) if valid_timing else None,

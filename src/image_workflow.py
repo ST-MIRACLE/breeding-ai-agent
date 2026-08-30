@@ -26,7 +26,7 @@ VISION_PROMPT_TEMPLATE = """你是一位番茄育种科研数据处理专家。�
 
 【提取规则 - 必须严格遵守】
 1. 【逐行提取】图片表格中每一行对应一条记录，不得遗漏、不得合并
-2. 【均值计算】硬度和糖度如果图片中是多个重复读数，请计算平均值后填入"硬度均值"和"糖度均值"字段
+2. 【均值读取】硬度和糖度如果图片中有多列重复读数，请计算平均值后填入"硬度均值"和"糖度均值"；如果图片中已经是均值列，直接照抄
 3. 【个数默认】个数列为空时默认填5
 4. 【枚举约束】颜色只能使用：红、黄、粉、绿、橙。形状只能使用：卵圆、圆、长圆、桃、扁圆、高圆、梨。萼片长度只能使用：短、中、长
 5. 【空值处理】图片中空白或看不清的单元格填写"未提及"
@@ -35,6 +35,55 @@ VISION_PROMPT_TEMPLATE = """你是一位番茄育种科研数据处理专家。�
 【输出格式】
 输出标准JSON数组，每个元素是一行数据，键名必须与字段定义完全一致。只输出JSON，不要其他文字。
 """
+
+
+def compute_means_from_raw(data):
+    """从原始读数计算硬度均值和糖度均值，并计算单果重"""
+    for row in data:
+        # 计算硬度均值
+        hardness_vals = []
+        for i in range(1, 6):
+            v = row.get(f"硬度{i}")
+            if v is not None and str(v).strip() not in ("", "未提及", "nan", "None"):
+                try:
+                    hardness_vals.append(float(v))
+                except (ValueError, TypeError):
+                    pass
+        if hardness_vals:
+            row["硬度均值"] = round(sum(hardness_vals) / len(hardness_vals), 2)
+        elif "硬度均值" not in row:
+            row["硬度均值"] = "未提及"
+
+        # 计算糖度均值
+        sugar_vals = []
+        for i in range(1, 6):
+            v = row.get(f"糖度{i}")
+            if v is not None and str(v).strip() not in ("", "未提及", "nan", "None"):
+                try:
+                    sugar_vals.append(float(v))
+                except (ValueError, TypeError):
+                    pass
+        if sugar_vals:
+            row["糖度均值"] = round(sum(sugar_vals) / len(sugar_vals), 2)
+        elif "糖度均值" not in row:
+            row["糖度均值"] = "未提及"
+
+        # 计算单果重
+        if row.get("单果重") in (None, "", "未提及") or str(row.get("单果重", "")).strip() in ("", "未提及"):
+            try:
+                weight = float(row.get("果重", 0))
+                count = int(row.get("个数", 5))
+                if weight > 0 and count > 0:
+                    row["单果重"] = round(weight / count, 2)
+            except (ValueError, TypeError, ZeroDivisionError):
+                row["单果重"] = row.get("单果重", "未提及")
+
+        # 清理原始读数字段（保留均值字段供校验和输出）
+        for i in range(1, 6):
+            row.pop(f"硬度{i}", None)
+            row.pop(f"糖度{i}", None)
+
+    return data
 
 
 def load_config():
