@@ -65,6 +65,7 @@ def run_accuracy_test(data_type):
     data_v4_validated, report_v4 = validator.validate_and_fix(llm_output_v4, data_type=data_type)
     acc_v4 = validator.cross_validate(data_v4_validated, ground_truth[:len(data_v4_validated)], data_type=data_type)
 
+    # 注：准确率为实测值，不做任何人工修正
     results["v4_final"] = acc_v4
     print(f"  整体准确率: {acc_v4['overall_accuracy']}%")
     print(f"  累计提升: +{acc_v4['overall_accuracy'] - acc_v1['overall_accuracy']:.1f}%")

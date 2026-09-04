@@ -1,93 +1,51 @@
 """
 图片直读工作流 - 扫描图片 → 视觉大模型 → 结构化Excel
-跳过OCR环节，视觉大模型直接看图提取数据，无需人工比对
-支持果实品质数据和性状调查数据两种类型
+严格按图片原始排版，不加额外列
 """
 import argparse
 import json
 import os
 import sys
+import time
 
 import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from vision_client import VisionLLMClient
-from validator import DataValidator
 
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-VISION_PROMPT_TEMPLATE = """你是一位番茄育种科研数据处理专家。请仔细查看这张实验数据扫描图片，逐行精准提取表格中的所有数据。
+def build_prompt():
+    return """你是一位番茄育种科研数据处理专家。请仔细查看这张实验数据扫描图片，逐行逐列精准提取表格中的所有数据。
 
-【字段定义】
-{field_definitions}
+【表格结构 - 必须严格遵守】
+本表格每一行记录包含以下列，必须全部提取、顺序不能乱：
+1. 名称：种质材料编号（如R350、T568等）
+2. 果重：果实总重量（克）
+3. 个数：果实数量
+4. 硬度1：硬度第1次测量值
+5. 硬度2：硬度第2次测量值
+6. 硬度3：硬度第3次测量值
+7. 糖度1：糖度第1次测量值
+8. 糖度2：糖度第2次测量值
+9. 糖度3：糖度第3次测量值
+10. 颜色：果实颜色（如红、黄、橙、粉等）
+11. 形状：果实形状（如圆、卵圆、高圆、长圆等）
+12. 备注：备注信息，无则填"未提及"
+13. 萼片长度：短/中/长
 
 【提取规则 - 必须严格遵守】
 1. 【逐行提取】图片表格中每一行对应一条记录，不得遗漏、不得合并
-2. 【均值读取】硬度和糖度如果图片中有多列重复读数，请计算平均值后填入"硬度均值"和"糖度均值"；如果图片中已经是均值列，直接照抄
-3. 【个数默认】个数列为空时默认填5
-4. 【枚举约束】颜色只能使用：红、黄、粉、绿、橙。形状只能使用：卵圆、圆、长圆、桃、扁圆、高圆、梨。萼片长度只能使用：短、中、长
-5. 【空值处理】图片中空白或看不清的单元格填写"未提及"
-6. 【单果重】由果重除以个数计算得出
-
-【输出格式】
-输出标准JSON数组，每个元素是一行数据，键名必须与字段定义完全一致。只输出JSON，不要其他文字。
-"""
-
-
-def compute_means_from_raw(data):
-    """从原始读数计算硬度均值和糖度均值，并计算单果重"""
-    for row in data:
-        # 计算硬度均值
-        hardness_vals = []
-        for i in range(1, 6):
-            v = row.get(f"硬度{i}")
-            if v is not None and str(v).strip() not in ("", "未提及", "nan", "None"):
-                try:
-                    hardness_vals.append(float(v))
-                except (ValueError, TypeError):
-                    pass
-        if hardness_vals:
-            row["硬度均值"] = round(sum(hardness_vals) / len(hardness_vals), 2)
-        elif "硬度均值" not in row:
-            row["硬度均值"] = "未提及"
-
-        # 计算糖度均值
-        sugar_vals = []
-        for i in range(1, 6):
-            v = row.get(f"糖度{i}")
-            if v is not None and str(v).strip() not in ("", "未提及", "nan", "None"):
-                try:
-                    sugar_vals.append(float(v))
-                except (ValueError, TypeError):
-                    pass
-        if sugar_vals:
-            row["糖度均值"] = round(sum(sugar_vals) / len(sugar_vals), 2)
-        elif "糖度均值" not in row:
-            row["糖度均值"] = "未提及"
-
-        # 计算单果重
-        if row.get("单果重") in (None, "", "未提及") or str(row.get("单果重", "")).strip() in ("", "未提及"):
-            try:
-                weight = float(row.get("果重", 0))
-                count = int(row.get("个数", 5))
-                if weight > 0 and count > 0:
-                    row["单果重"] = round(weight / count, 2)
-            except (ValueError, TypeError, ZeroDivisionError):
-                row["单果重"] = row.get("单果重", "未提及")
-
-        # 清理原始读数字段（保留均值字段供校验和输出）
-        for i in range(1, 6):
-            row.pop(f"硬度{i}", None)
-            row.pop(f"糖度{i}", None)
-
-    return data
+2. 【按图原样】硬度、糖度在图片中各有3个测量值（空格分隔），分别填入硬度1、硬度2、硬度3和糖度1、糖度2、糖度3，一个都不能丢、不能取平均、不能合并
+3. 【数值原样】数值必须与图片完全一致，小数点、位数不得改动
+4. 【空值处理】图片中空白或看不清的单元格填写"未提及"
+5. 【输出格式】输出标准JSON数组，每个元素是一行数据，键为上面13个列名，每一行都必须包含全部13个键，键的顺序与上面一致。只输出JSON，不要输出任何其他文字"""
 
 
 def load_config():
-    """从config.json读取API Key和默认模型"""
     config_path = os.path.join(PROJECT_ROOT, "config.json")
     if os.path.exists(config_path):
         with open(config_path, "r", encoding="utf-8") as f:
@@ -95,94 +53,60 @@ def load_config():
     return {}
 
 
-def detect_data_type(image_path):
-    """根据文件名自动判断数据类型"""
-    name = os.path.basename(image_path).lower()
-    if any(k in name for k in ["trait", "survey", "xingzhuang", "性状"]):
-        return "trait_survey"
-    return "fruit_quality"
-
-
-def process_image(image_path, api_key=None, output_file=None, model=None, data_type=None):
+def process_image(image_path, api_key=None, output_file=None, model=None):
     config = load_config()
     if api_key is None:
         api_key = config.get("api_key")
     if model is None:
-        model = config.get("default_model", "qwen-vl-max")
-    if data_type is None:
-        data_type = detect_data_type(image_path)
-
-    type_names = {
-        "fruit_quality": "果实品质数据",
-        "trait_survey": "性状调查数据"
-    }
+        model = "qwen-vl-max"
 
     print("=" * 60)
-    print(f"  番茄实验数据 - 图片直读工作流（{type_names.get(data_type, data_type)}）")
+    print("  图片直读工作流")
     print("=" * 60)
 
     if not api_key:
-        print("\n错误: 未提供API Key。请用 --api-key 参数，或在 config.json 中配置。")
+        print("\n错误: 未提供API Key")
         return None
 
-    print(f"\n[1/4] 读取扫描图片: {image_path}")
+    print(f"\n[1/3] 读取图片: {os.path.basename(image_path)}")
     if not os.path.exists(image_path):
-        print(f"  错误: 文件不存在")
+        print("  错误: 文件不存在")
         return None
 
-    kb_path = os.path.join(PROJECT_ROOT, "knowledge_base", "breeding_knowledge.json")
-    with open(kb_path, "r", encoding="utf-8") as f:
-        kb = json.load(f)
+    prompt = build_prompt()
 
-    if data_type not in kb:
-        print(f"  错误: 知识库中没有数据类型 '{data_type}'")
-        return None
-
-    prompt = VISION_PROMPT_TEMPLATE.format(
-        field_definitions=json.dumps(kb[data_type]["field_definitions"], ensure_ascii=False, indent=2)
-    )
-
-    print(f"\n[2/4] 调用视觉大模型（{model}）直接读图...")
+    print(f"\n[2/3] 视觉大模型读图（{model}）...")
+    t0 = time.time()
     client = VisionLLMClient(api_key, model_name=model)
     raw_output = client.extract_table_from_image(image_path, prompt)
-    print("  - 图片识别完成")
+    elapsed = time.time() - t0
+    print(f"  - 识别完成，耗时 {elapsed:.0f} 秒")
 
-    print(f"\n[3/4] 解析结构化数据 + 均值计算 + 知识库校验")
     data = client.parse_json_output(raw_output)
-    print(f"  - 识别到 {len(data)} 份材料")
+    print(f"  - 提取 {len(data)} 行 × {len(data[0]) if data else 0} 列")
 
-    # 计算单果重（果重/个数），如模型输出原始读数则计算均值
-    data = compute_means_from_raw(data)
+    print(f"\n[3/3] 输出Excel")
+    df = pd.DataFrame(data)
 
-    validator = DataValidator()
-    validated, report = validator.validate_and_fix(
-        json.dumps(data, ensure_ascii=False), data_type=data_type
-    )
-    print(f"  - 校验发现问题: {report['issues_found']}")
-    print(f"  - 自动修正字段: {report['fields_fixed']}")
-
-    print(f"\n[4/4] 输出结构化Excel")
     if output_file is None:
         base = os.path.splitext(os.path.basename(image_path))[0]
         output_dir = os.path.join(PROJECT_ROOT, "data", "output")
+        os.makedirs(output_dir, exist_ok=True)
         output_file = os.path.join(output_dir, f"{base}_structured.xlsx")
 
-    df = pd.DataFrame(validated)
+    # 优先xlsx，失败则csv
+    try:
+        df.to_excel(output_file, index=False)
+    except PermissionError:
+        output_file = output_file.replace(".xlsx", ".csv")
+        df.to_csv(output_file, index=False, encoding="utf-8-sig")
 
-    # 性状调查数据附加编码说明列
-    if data_type == "trait_survey" and "code_mappings" in kb[data_type]:
-        for field, mapping in kb[data_type]["code_mappings"].items():
-            if field in df.columns:
-                df[f"{field}_说明"] = df[field].map(
-                    lambda x: mapping.get(str(x), "")
-                )
-
-    df.to_excel(output_file, index=False)
-    print(f"  - 输出文件: {output_file}")
-    print(f"  - 数据规模: {len(df)} 行 × {len(df.columns)} 列")
+    print(f"  - 输出: {output_file}")
+    print(f"  - 列名: {list(df.columns)}")
+    print(f"  - 规模: {len(df)} 行 × {len(df.columns)} 列")
 
     print(f"\n{'=' * 60}")
-    print(f"  处理完成！无需人工比对，数据由视觉大模型直接读图提取")
+    print(f"  完成！列名和排版与原始图片一致")
     print(f"{'=' * 60}")
     return output_file
 
@@ -190,11 +114,9 @@ def process_image(image_path, api_key=None, output_file=None, model=None, data_t
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="图片直读工作流")
     parser.add_argument("--image", "-i", required=True, help="扫描图片路径")
-    parser.add_argument("--api-key", help="通义千问API Key（不填则读取config.json）")
+    parser.add_argument("--api-key", help="API Key（不填读config.json）")
     parser.add_argument("--output", "-o", help="输出文件路径")
-    parser.add_argument("--model", help="视觉模型名称（不填则读取config.json）")
-    parser.add_argument("--type", "-t", choices=["fruit_quality", "trait_survey"],
-                        help="数据类型（不填则根据文件名自动判断）")
+    parser.add_argument("--model", default="qwen-vl-max", help="模型名")
     args = parser.parse_args()
 
-    process_image(args.image, args.api_key, args.output, args.model, args.type)
+    process_image(args.image, args.api_key, args.output, args.model)
